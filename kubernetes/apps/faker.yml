@@ -1,8 +1,14 @@
 ---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faker
+---
 kind: Deployment
 apiVersion: apps/v1
 metadata:
   name: faker
+  namespace: faker
   labels:
     k8s-app: faker
 spec:
@@ -25,13 +31,14 @@ spec:
           containerPort: 5000
         resources:
           requests:
-            cpu: "250m"
+            cpu: "256m"
             memory: "512m"
 ---
 kind: Service
 apiVersion: v1
 metadata:
   name: faker
+  namespace: faker
 spec:
   selector:
     k8s-app: faker
@@ -42,17 +49,42 @@ spec:
   type: ClusterIP
 
 ---
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: faker
-  annotations:
-    kubernetes.io/ingress.class: traefik
-spec:
+  namespace: faker
+  # annotations:
+  #   kubernetes.io/ingress.class: traefik
+  spec:
+  ingressClassName: "traefik-lb"
   rules:
   - http:
       paths:
-      - path: /faker
+      - path: "/faker"
+        pathType: Prefix
         backend:
-          serviceName: faker
-          servicePort: 5000
+          service: 
+            name: faker
+            port:
+              number: 5000
+---
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: faker
+  namespace: faker
+spec:
+  maxReplicas: 5
+  minReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 30
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: faker
